@@ -9,10 +9,13 @@ OTHER_FILES += \
 
 #与其它语言只有一种函数不同的是，qmake有两种函数类型。
 #1. Replace Funcions
-#  定义 Replace 函数
+#  定义 Replace Funcation
 #  返回一个值、列表或者不返回
 #  defineReplace(functionName){
-#      #function code
+#      #args: $$1 $$2 $$3 ...
+#      #all args list: $$ARGS
+#      #function body
+#      #[return(ret)]
 #  }
 #
 defineReplace(headersAndSources) {
@@ -34,49 +37,83 @@ defineReplace(headersAndSources) {
   return($$headers $$sources)
 }
 
-# $1: libaray name
-defineReplace(libarayName){
-    SUFFIX=
-    LIBNAME=$$1
-    RET=
-    CONFIG(debug, debug|release):SUFFIX=_d
-    win32{
-        RET = $${LIBNAME}$${SUFFIX}.lib
-    }else:unix{
-        RET = $${LIBNAME}$${SUFFIX}.a
-    }else{
-        error("Unkonw Platform")
+defineReplace(libraryNameSuffix){
+    suffix=
+    CONFIG(debug, release|debug){
+        !debug_and_release|build_pass{
+            mac: return($${suffix}_debug)
+            win32: return($${suffix}d)
+        }
     }
-    return ($$RET)
-
+    return($$suffix)
 }
+# $1: libaray name
+defineReplace(librayName){
+    isEmpty(1){         #使用参数作为另一个函数的实参时无需扩展($$)，除非函数实参需要的是字符串
+        error("The library name can not be empty")
+    }
+    LIB_NAME=$$1
+    CONFIG(shared, shared|static):qtConfig(framework){
+      QMAKE_FRAMEWORK_BUNDLE_NAME = $$LIBRARY_NAME
+      export(QMAKE_FRAMEWORK_BUNDLE_NAME)
+    }
 
-message("function result": $$libarayName(test))
-#可以在函数内到处变量 export(RET)
-message("RET":$$RET)
+    return($$LIB_NAME$$libraryNameSuffix())
+}
+message("function result": $$librayName(demo))
 
-#2. 定义 Test 函数
-#  定义 Test 函数
+defineReplace(printArgsCount){
+    listCount=0
+    message("arg var:": $$ARGS)
+    for(i, ARGS){
+        listCount = $$num_add($$listCount, 1)
+    }
+    return($$listCount)
+}
+message("args  count:":$$printArgsCount(a,b,c,d))
+
+#可以在函数内局部变量导出变量到全局中(达到一种类似于pass by reference 的作用)
+# export(RET)
+defineReplace(exportVariable){
+    isEmpty(1){
+        return("")
+    }
+    $$1=newVar
+    export($$1)
+}
+var=oldVar
+retVar=$$exportVariable("var")
+message("export var:":$$var)
+
+#2. Test Funcation
+#  定义 Test Funcation
 #  必须返回 true 或 false
 #  defineTest(functionName){
-#      #function code
-#      return (true)    #return (false)
+#      #args: $$1 $$2 $$3 ...
+#      #all args: $$ARGS
+#      #function body
+#      #<return({true,false})>
 #  }
 #
 
-  defineTest(allFiles) {
-      files = $$ARGS
-
-      for(file, files) {
-          !exists($$file) {
-              return(false)
-          }
+defineTest(checkAllFiles) {
+  for(file, ARGS) {
+      !exists($$file) {
+          return(false)
       }
-      return(true)
   }
+  return(true)
+}
+checkAllFiles($$PWD/t3.md, $$PWD/t4.md){
+    message("All files exist")
+}else{
+    message("Some files do not exist")
+}
+
 
 
 #---
+#some built-in funcation
 file=$$PWD/t3.md
 message("absolute_path":$$absolute_path(file))
 
@@ -90,3 +127,6 @@ message("First line\nSecond line")
 
 message("format_number":$$format_number(11, ibase=16 width=6 zeropad))
 message($$BAD)
+
+message("PWD:": $$PWD)
+message("_PRO_FILE_PWD_:": $$_PRO_FILE_PWD_)
